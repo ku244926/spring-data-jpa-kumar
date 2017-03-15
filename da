@@ -1,0 +1,176 @@
+
+var PROJECTS_LIST = [];
+var project_ivy_depends = [];
+
+
+function include(filename, onload) {
+    var head = document.getElementsByTagName('head')[0];
+    var script = document.createElement('script');
+    script.src = filename;
+    script.type = 'text/javascript';
+    script.onload = script.onreadystatechange = function() {
+        if (script.readyState) {
+            if (script.readyState === 'complete' || script.readyState === 'loaded') {
+                script.onreadystatechange = null;                                                  
+                onload();
+            }
+        } 
+        else {
+            onload();          
+        }
+    };
+    head.appendChild(script);
+}
+
+
+
+function loadOpenGrokIvyProjects() {
+
+include('http://ajax.googleapis.com/ajax/libs/jquery/1.7.0/jquery.min.js', function() {
+
+})
+
+	$.ajax({
+		url : "http://SEIDEVC20WLS01.GWPDEV.SEIC.COM:8003/SDTIvyExtract" + "/opengrok-search",
+		data : {
+			query : "load",
+			path : "sql"
+		},
+		method : 'GET',
+		success : function(data) {
+			var parsedHtml = $.parseHTML(data);
+			var selectableProjects = $(parsedHtml)
+					.find("#ptbl > select option");
+
+			for (var i = 0; i < selectableProjects.length; i++) {
+				PROJECTS_LIST.push(selectableProjects[i].value);
+			}
+
+			fetchIvyOpenGrok();
+			loadDependency();
+			createNode();
+			createNodeDependencyGraph();
+
+			var project_names = [];
+			$.each(project_ivy_depends, function(index) {
+				project_names.push(project_ivy_depends[index]["name"])
+			});
+
+		},
+		error : function() {
+			alert("error");
+		}
+
+	});
+
+}
+
+function fetchIvyOpenGrok() {
+
+	for (var i = 0; i < PROJECTS_LIST.length; i++) {
+		$.ajax({
+			url : "http://SEIDEVC20WLS01.GWPDEV.SEIC.COM:8003/SDTIvyExtract" + "/opengrok-search-ivy",
+			data : {
+				project : PROJECTS_LIST[i]
+			},
+			traditional : true,
+			type : "GET",
+			async : false
+		}).done(function(data) {
+			var parsedHTML = $.parseHTML(data);
+			var parsedObject = new Object();
+			if (parsedHTML) {
+				parsedObject = parseIvyOpenGrokResults(parsedHTML);
+			} else {
+				parsedObject.name = PROJECTS_LIST[i].toLowerCase();
+				parsedObject.depends = [];
+				parsedObject.weight = 0;
+			}
+			project_ivy_depends.push(parsedObject);
+		});
+
+	}
+
+}
+
+function loadDependency() {
+	for (var i = 0; i < project_ivy_depends.length; i++) {
+
+		var depends = project_ivy_depends[i].depends;
+		for (var j = 0; j < project_ivy_depends.length; j++) {
+			for (var k = 0; k < depends.length; k++) {
+				if (project_ivy_depends[j].name === depends[k]) {
+					project_ivy_depends[j].weight++;
+					console.log("project name is "
+							+ project_ivy_depends[i].name);
+					console.log("project dependency is " + depends[k]);
+					$.ajax({
+						url : appRoot + "/ivy-dependency",
+						data : {
+							project : project_ivy_depends[i].name,
+							dependency : depends[k]
+						},
+						traditional : true,
+						type : "GET",
+						async : false
+					}).done(function(data) {
+
+					});
+
+				}
+			}
+		}
+	}
+}
+
+function createNode() {
+
+	$.ajax({
+		url : "http://SEIDEVC20WLS01.GWPDEV.SEIC.COM:8003/SDTIvyExtract" + "/create-node",
+		traditional : true,
+		type : "GET",
+		async : false
+	}).done(function(data) {
+
+	});
+
+}
+
+function createNodeDependencyGraph() {
+
+	$.ajax({
+		url : "http://SEIDEVC20WLS01.GWPDEV.SEIC.COM:8003/SDTIvyExtract" + "/create-node-dependency",
+		traditional : true,
+		type : "GET",
+		async : false
+	}).done(function(data) {
+
+	});
+
+}
+
+function parseIvyOpenGrokResults(resultHTML) {
+	var parsedObject = new Object();
+
+	// parse the data
+	try {
+		var dependencies = $(resultHTML).find("span:contains('seic')").next()
+				.next();
+		parsedObject.name = $(dependencies[0]).text().replace('"', '').replace(
+				'"', '');
+		parsedObject.depends = [];
+		parsedObject.weight = 0;
+		for (var i = 1; i < dependencies.length; i++) {
+			var depend = $(dependencies[i]).text();
+			if (depend.indexOf("-") >= 0 && depend.indexOf("=") < 0
+					&& depend.indexOf(".") < 0) {
+				parsedObject.depends.push(depend.replace('"', '').replace('"',
+						''));
+			}
+		}
+	} catch (err) {
+		parsedObject.errorMessage = "No Data Found";
+	} finally {
+		return parsedObject;
+	}
+}

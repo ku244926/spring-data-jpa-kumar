@@ -1,0 +1,105 @@
+package org.kumar.waitnotify;
+
+public class ProducerConsumer {
+	
+	private static Object lock = new Object();
+	private static int [] buffer;
+	private static int count;
+	
+	static class Producer{
+		
+		void produce(){
+			synchronized(lock){
+				if (isFull(buffer)){
+					try {
+						lock.wait();
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}
+				
+				buffer[count++]=1;
+				lock.notify();
+			}
+		
+		
+		}
+	}
+	
+	static class Consumer{
+		
+		void consume(){
+			synchronized(lock){
+				if(isEmpty(buffer)){
+					try {
+						lock.wait();
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}
+				buffer[--count]=0;
+				lock.notify();
+			}
+		
+
+			
+		}
+		
+	}
+	
+
+	public static void main(String[] args) throws InterruptedException {
+		
+		buffer = new int[10];
+		count =0;
+		Producer producer = new Producer(); 
+		Consumer consumer = new Consumer();
+		
+			
+			Runnable producertask  =()->{
+				for(int i=0;i<50;i++){
+				producer.produce();
+				}
+				
+				System.out.println("finished producing");
+			};
+		
+		
+		
+			
+			Runnable consumertask  =()->{
+				for(int i=0;i<450;i++){
+				consumer.consume();
+				}
+				
+				System.out.println("finished consuming");
+			};
+		
+		
+		Thread producerthread = new Thread(producertask);
+		Thread consumerthread = new Thread(consumertask);
+		
+		producerthread.start();
+		consumerthread.start();
+		
+		producerthread.join();
+		consumerthread.join();
+
+		System.out.println("value of count after producer and consume is  "+count);
+	}
+
+
+	static public boolean isEmpty(int[] buffer) {
+		
+		return count==0;
+	}
+
+
+	static public boolean isFull(int[] buffer) {
+	
+		return count==buffer.length;
+	}
+
+}
